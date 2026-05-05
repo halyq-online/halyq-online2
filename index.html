@@ -277,6 +277,28 @@ function exportCSV(){
 render();
 setInterval(checkNotifications, 60 * 60 * 1000);
 checkNotifications();
+  <script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCT_nhRKFLGeREoieQoxV3exOcDvpSHTYE",
+  authDomain: "halyq-control.firebaseapp.com",
+  projectId: "halyq-control",
+  storageBucket: "halyq-control.firebasestorage.app",
+  messagingSenderId: "994924445008",
+  appId: "1:994924445008:web:501a14b3527a88dc930055",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+window.db = db;
+
+console.log("🔥 Firebase connected");
+
+</script>
 </script>
 </body>
 </html>
