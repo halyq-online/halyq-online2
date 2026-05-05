@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Контроль оплат накладных</title>
+  <style>
+    :root {
+      --bg:#f6f7fb; --card:#ffffff; --text:#202124; --muted:#667085;
+      --border:#e4e7ec; --danger:#fee4e2; --dangerText:#b42318;
+      --warn:#fef0c7; --warnText:#b54708; --ok:#dcfae6; --okText:#067647;
+      --blue:#2563eb;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:18px 16px; background:#111827; color:white; position:sticky; top:0; z-index:10; }
+    header h1 { margin:0; font-size:20px; }
+    header p { margin:5px 0 0; color:#d1d5db; font-size:13px; }
+    main { padding:14px; max-width:1200px; margin:auto; }
+    .grid { display:grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap:10px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:14px; box-shadow:0 1px 2px rgba(16,24,40,.04); }
+    label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+    input, select, button { width:100%; padding:10px; border:1px solid var(--border); border-radius:10px; font-size:14px; background:white; }
+    button { cursor:pointer; border:none; background:var(--blue); color:white; font-weight:600; }
+    button.secondary { background:#475467; }
+    button.danger { background:#d92d20; }
+    button.light { background:#f2f4f7; color:#344054; border:1px solid var(--border); }
+    .actions { display:grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap:8px; margin-top:10px; }
+    .summary { display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
+    .summary div { background:#f9fafb; border:1px solid var(--border); border-radius:12px; padding:10px; }
+    .summary b { display:block; font-size:18px; margin-top:3px; }
+    .table-wrap { overflow:auto; }
+    table { width:100%; border-collapse:collapse; min-width:1000px; }
+    th, td { border-bottom:1px solid var(--border); padding:9px; text-align:left; font-size:13px; vertical-align:middle; }
+    th { color:#475467; background:#f9fafb; position:sticky; top:72px; z-index:5; }
+    tr.overdue { background:var(--danger); color:var(--dangerText); }
+    tr.due { background:var(--warn); color:var(--warnText); }
+    tr.paid { background:var(--ok); color:var(--okText); }
+    .pill { padding:5px 8px; border-radius:999px; font-weight:700; display:inline-block; font-size:12px; background:#eef2ff; }
+    .pill.danger { background:#fecdca; color:#b42318; }
+    .pill.warn { background:#fedf89; color:#93370d; }
+    .pill.ok { background:#abefc6; color:#067647; }
+    .rowbtns { display:flex; gap:6px; }
+    .rowbtns button { padding:7px 8px; font-size:12px; }
+    @media (max-width: 800px) {
+      .grid { grid-template-columns:1fr 1fr; }
+      .summary { grid-template-columns:1fr 1fr; }
+      .actions { grid-template-columns:1fr 1fr; }
+      header h1 { font-size:18px; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Контроль оплат накладных</h1>
+  <p>Фирмы, накладные, сроки оплаты, просрочки и уведомления за 3 дня</p>
+</header>
+
+<main>
+  <section class="card">
+    <div class="grid">
+      <div><label>Фирма</label><input id="firm" placeholder="Напр: Аспан Азия"></div>
+      <div><label>№ накладной</label><input id="invoice" placeholder="Напр: 00125"></div>
+      <div><label>Дата прихода товара</label><input id="date" type="date"></div>
+      <div><label>Срок, дней</label><input id="term" type="number" placeholder="7 / 14 / 30"></div>
+      <div><label>Сумма</label><input id="amount" type="number" placeholder="150000"></div>
+      <div><label>Статус</label><select id="status"><option>Не оплачено</option><option>Оплачено</option></select></div>
+    </div>
+    <div class="actions">
+      <button onclick="addOrUpdate()">Добавить / сохранить</button>
+      <button class="secondary" onclick="requestNotifications()">Включить уведомления</button>
+      <button class="light" onclick="exportCSV()">Экспорт в Excel CSV</button>
+      <button class="light" onclick="clearForm()">Очистить форму</button>
+      <button class="danger" onclick="deleteAll()">Удалить всё</button>
+    </div>
+  </section>
+
+  <section class="card summary">
+    <div>Всего неоплачено<b id="sumUnpaid">0 ₸</b></div>
+    <div>Оплатить в течение 3 дней<b id="sum3">0 ₸</b></div>
+    <div>Просрочено<b id="sumOverdue">0 ₸</b></div>
+    <div>Всего накладных<b id="count">0</b></div>
+  </section>
+
+  <section class="card">
+    <div class="grid" style="grid-template-columns:2fr 1fr 1fr;">
+      <div><label>Поиск по фирме / накладной</label><input id="search" placeholder="Введите название фирмы..." oninput="render()"></div>
+      <div><label>Фильтр</label><select id="filter" onchange="render()"><option>Все</option><option>Не оплачено</option><option>Оплачено</option><option>Срок 3 дня</option><option>Просрочено</option></select></div>
+      <div><label>Сортировка</label><select id="sort" onchange="render()"><option>По сроку оплаты</option><option>По фирме</option><option>По сумме</option></select></div>
+    </div>
+  </section>
+
+  <section class="card table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Фирма</th><th>Накладная</th><th>Дата прихода</th><th>Срок</th><th>Дата оплаты</th>
+          <th>Осталось дней</th><th>Сумма</th><th>Статус</th><th>Действия</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+let rows = JSON.parse(localStorage.getItem('paymentRows') || '[]');
+let editId = null;
+
+function save(){ localStorage.setItem('paymentRows', JSON.stringify(rows)); }
+function fmtMoney(n){ return (Number(n)||0).toLocaleString('ru-RU') + ' ₸'; }
+function parseDate(s){ const d = new Date(s + 'T00:00:00'); return isNaN(d) ? null : d; }
+function isoDate(d){ return d.toISOString().slice(0,10); }
+function dueDate(row){
+  const d = parseDate(row.date); if(!d) return '';
+  d.setDate(d.getDate() + Number(row.term || 0));
+  return isoDate(d);
+}
+function daysLeft(row){
+  const due = parseDate(dueDate(row)); if(!due) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Math.ceil((due - today) / 86400000);
+}
+
+function addOrUpdate(){
+  const row = {
+    id: editId || Date.now(),
+    firm: document.getElementById('firm').value.trim(),
+    invoice: document.getElementById('invoice').value.trim(),
+    date: document.getElementById('date').value,
+    term: Number(document.getElementById('term').value),
+    amount: Number(document.getElementById('amount').value),
+    status: document.getElementById('status').value
+  };
+  if(!row.firm || !row.invoice || !row.date || !row.term){
+    alert('Фирма, накладная, дата және срок міндетті түрде толтырылсын.');
+    return;
+  }
+  if(editId){
+    rows = rows.map(r => r.id === editId ? row : r);
+  } else {
+    rows.push(row);
+  }
+  editId = null; save(); clearForm(); render(); checkNotifications();
+}
+
+function clearForm(){
+  document.getElementById('firm').value='';
+  document.getElementById('invoice').value='';
+  document.getElementById('date').value='';
+  document.getElementById('term').value='';
+  document.getElementById('amount').value='';
+  document.getElementById('status').value='Не оплачено';
+  editId=null;
+}
+
+function editRow(id){
+  const r = rows.find(x=>x.id===id); if(!r) return;
+  document.getElementById('firm').value=r.firm;
+  document.getElementById('invoice').value=r.invoice;
+  document.getElementById('date').value=r.date;
+  document.getElementById('term').value=r.term;
+  document.getElementById('amount').value=r.amount;
+  document.getElementById('status').value=r.status;
+  editId=id;
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function togglePaid(id){
+  rows = rows.map(r => r.id===id ? {...r, status: r.status === 'Оплачено' ? 'Не оплачено' : 'Оплачено'} : r);
+  save(); render();
+}
+
+function deleteRow(id){
+  if(confirm('Осы накладнойды удалить етесіз бе?')){
+    rows = rows.filter(r=>r.id!==id); save(); render();
+  }
+}
+
+function deleteAll(){
+  if(confirm('Барлық мәлімет өшеді. Сенімдісіз бе?')){
+    rows=[]; save(); render();
+  }
+}
+
+function render(){
+  let list = [...rows];
+  const q = document.getElementById('search').value.toLowerCase();
+  const f = document.getElementById('filter').value;
+  list = list.filter(r => (r.firm + ' ' + r.invoice).toLowerCase().includes(q));
+  list = list.filter(r => {
+    const dl = daysLeft(r);
+    if(f === 'Не оплачено') return r.status === 'Не оплачено';
+    if(f === 'Оплачено') return r.status === 'Оплачено';
+    if(f === 'Срок 3 дня') return r.status !== 'Оплачено' && dl >= 0 && dl <= 3;
+    if(f === 'Просрочено') return r.status !== 'Оплачено' && dl < 0;
+    return true;
+  });
+  const sortVal = document.getElementById('sort').value;
+  if(sortVal === 'По фирме') list.sort((a,b)=>a.firm.localeCompare(b.firm));
+  else if(sortVal === 'По сумме') list.sort((a,b)=>Number(b.amount)-Number(a.amount));
+  else list.sort((a,b)=>daysLeft(a)-daysLeft(b));
+
+  document.getElementById('tbody').innerHTML = '';
+  let sumUnpaid=0, sum3=0, sumOverdue=0;
+  rows.forEach(r=>{
+    const dl = daysLeft(r), amount = Number(r.amount)||0;
+    if(r.status !== 'Оплачено'){
+      sumUnpaid += amount;
+      if(dl >= 0 && dl <= 3) sum3 += amount;
+      if(dl < 0) sumOverdue += amount;
+    }
+  });
+  document.getElementById('sumUnpaid').textContent = fmtMoney(sumUnpaid);
+  document.getElementById('sum3').textContent = fmtMoney(sum3);
+  document.getElementById('sumOverdue').textContent = fmtMoney(sumOverdue);
+  document.getElementById('count').textContent = rows.length;
+
+  for(const r of list){
+    const dl = daysLeft(r);
+    let cls = '';
+    if(r.status === 'Оплачено') cls='paid';
+    else if(dl < 0) cls='overdue';
+    else if(dl <= 3) cls='due';
+    let pill = r.status === 'Оплачено' ? '<span class="pill ok">Оплачено</span>' :
+      dl < 0 ? '<span class="pill danger">Просрочено</span>' :
+      dl <= 3 ? '<span class="pill warn">Скоро оплата</span>' :
+      '<span class="pill">Не оплачено</span>';
+    const tr = document.createElement('tr');
+    tr.className = cls;
+    tr.innerHTML = `
+      <td>${r.firm}</td><td>${r.invoice}</td><td>${r.date}</td><td>${r.term} дней</td><td>${dueDate(r)}</td>
+      <td>${dl}</td><td>${fmtMoney(r.amount)}</td><td>${pill}</td>
+      <td class="rowbtns">
+        <button class="light" onclick="editRow(${r.id})">Изм.</button>
+        <button class="secondary" onclick="togglePaid(${r.id})">${r.status==='Оплачено'?'Отменить':'Оплачено'}</button>
+        <button class="danger" onclick="deleteRow(${r.id})">Del</button>
+      </td>`;
+    document.getElementById('tbody').appendChild(tr);
+  }
+}
+
+function requestNotifications(){
+  if(!('Notification' in window)){ alert('Бұл браузер notification қолдамайды.'); return; }
+  Notification.requestPermission().then(p => {
+    alert(p === 'granted' ? 'Уведомления қосылды.' : 'Уведомленияға рұқсат берілмеді.');
+    checkNotifications();
+  });
+}
+
+function checkNotifications(){
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  const todayKey = new Date().toISOString().slice(0,10);
+  const sent = JSON.parse(localStorage.getItem('sentNotifications') || '{}');
+  rows.forEach(r=>{
+    const dl = daysLeft(r);
+    const key = todayKey + '_' + r.id;
+    if(r.status !== 'Оплачено' && dl === 3 && !sent[key]){
+      new Notification('Через 3 дня оплата', { body: `${r.firm}, накладная ${r.invoice}, сумма ${fmtMoney(r.amount)}` });
+      sent[key] = true;
+    }
+  });
+  localStorage.setItem('sentNotifications', JSON.stringify(sent));
+}
+
+function exportCSV(){
+  const header = ['Фирма','Накладная','Дата прихода','Срок','Дата оплаты','Осталось дней','Сумма','Статус'];
+  const lines = [header.join(';')];
+  rows.forEach(r => lines.push([r.firm,r.invoice,r.date,r.term,dueDate(r),daysLeft(r),r.amount,r.status].join(';')));
+  const blob = new Blob(["\ufeff" + lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'kontrol_oplat.csv';
+  a.click();
+}
+
+render();
+setInterval(checkNotifications, 60 * 60 * 1000);
+checkNotifications();
+</script>
+</body>
+</html>
