@@ -108,6 +108,15 @@ let rows = JSON.parse(localStorage.getItem('paymentRows') || '[]');
 let editId = null;
 
 function save(){ localStorage.setItem('paymentRows', JSON.stringify(rows)); }
+  saveInvoice({
+  company: companyInput.value,
+  number: invoiceInput.value,
+  date: dateInput.value,
+  days: daysInput.value,
+  amount: amountInput.value,
+  status: statusInput.value,
+  created: Date.now()
+});
 function fmtMoney(n){ return (Number(n)||0).toLocaleString('ru-RU') + ' ₸'; }
 function parseDate(s){ const d = new Date(s + 'T00:00:00'); return isNaN(d) ? null : d; }
 function isoDate(d){ return d.toISOString().slice(0,10); }
