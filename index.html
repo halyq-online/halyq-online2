@@ -297,7 +297,48 @@ const db = getFirestore(app);
 window.db = db;
 
 console.log("🔥 Firebase connected");
+<script type="module">
 
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  // сенің firebase config
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const invoicesRef = collection(db, "invoices");
+
+
+// 🔥 ДОБАВИТЬ НАКЛАДНОЙ
+window.saveInvoice = async function(data) {
+  await addDoc(invoicesRef, data);
+};
+
+
+// 🔥 LIVE UPDATE
+onSnapshot(invoicesRef, (snapshot) => {
+
+  const list = [];
+
+  snapshot.forEach(doc => {
+    list.push(doc.data());
+  });
+
+  renderInvoices(list); // сенің бұрынғы table функция
+});
+
+console.log("🔥 LIVE DATABASE READY");
+
+</script>
 </script>
 </script>
 </body>
